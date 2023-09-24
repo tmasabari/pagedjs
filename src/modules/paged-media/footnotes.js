@@ -383,7 +383,8 @@ class Footnotes extends Handler {
 		let noteContentBounds = noteContent.getBoundingClientRect();
 		let { width } = noteContentBounds;
 
-		noteInnerContent.style.columnWidth = Math.round(width) + "px";
+		//use ceil for foot note size instead of round and make sure there are no overlfows
+		noteInnerContent.style.columnWidth = Math.ceil(width) + "px";
 		noteInnerContent.style.columnGap = "calc(var(--pagedjs-margin-right) + var(--pagedjs-margin-left))";
 
 		// Get overflow

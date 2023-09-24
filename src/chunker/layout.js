@@ -523,17 +523,23 @@ class Layout {
 		let {width, height} = element.getBoundingClientRect();
 		let scrollWidth = constrainingElement ? constrainingElement.scrollWidth : 0;
 		let scrollHeight = constrainingElement ? constrainingElement.scrollHeight : 0;
-		return Math.max(Math.floor(width), scrollWidth) > Math.round(bounds.width) ||
-			Math.max(Math.floor(height), scrollHeight) > Math.round(bounds.height);
+		//use ceil for element width and height and floor for available width and height
+		//this is to make sure there are no overflows
+		let finalWidth = Math.ceil(Math.max(width, scrollWidth));
+		let finalHeight = Math.ceil(Math.max(height, scrollHeight));
+		return (finalWidth > 0 && ( finalWidth > Math.floor(bounds.width) ) ) ||
+			(finalHeight > 0 && ( finalHeight > Math.floor(bounds.height) ) );
 	}
 
 	findOverflow(rendered, bounds = this.bounds, gap = this.gap) {
 		if (!this.hasOverflow(rendered, bounds)) return;
 
-		let start = Math.floor(bounds.left);
-		let end = Math.round(bounds.right + gap);
-		let vStart = Math.round(bounds.top);
-		let vEnd = Math.round(bounds.bottom);
+		//use ceil for container/bounds start postions and floor for available width and height
+		//this is to make sure there are no overflows
+		let start = Math.ceil(bounds.left);
+		let end = Math.floor(bounds.right + gap);
+		let vStart = Math.ceil(bounds.top);
+		let vEnd = Math.floor(bounds.bottom);
 		let range;
 
 		let walker = walk(rendered.firstChild, rendered);
@@ -551,11 +557,17 @@ class Layout {
 
 			if (node) {
 				let pos = getBoundingClientRect(node);
-				let left = Math.round(pos.left);
-				let right = Math.floor(pos.right);
-				let top = Math.round(pos.top);
-				let bottom = Math.floor(pos.bottom);
+				//use floor for element/node start postions and ceil for available width and height
+				//this is to make sure there are no overflows
+				let left = Math.floor(pos.left);
+				let right = Math.ceil(pos.right);
+				let top = Math.floor(pos.top);
+				let bottom = Math.ceil(pos.bottom);
 
+				//check either the content left(start) exceeds the page width or
+				//	top position exceeds the page height
+				//this checks the overflow at the element level (the next block checks at the text level)
+				//so for large table this blocks checks overflow at the row level.
 				if (!range && (left >= end || top >= vEnd)) {
 					// Check if it is a float
 					let isFloat = false;
@@ -616,7 +628,8 @@ class Layout {
 							}
 						}
 					}
-
+					//if anyone of ["TBODY", "THEAD"]  contains
+					//"break-inside" === "avoid" so break at the beginning of the container (body/head)
 					if (prev) {
 						range = document.createRange();
 						range.selectNode(prev);
@@ -645,6 +658,8 @@ class Layout {
 					let rect;
 					left = 0;
 					top = 0;
+					right = 0;
+					bottom = 0;
 					for (var i = 0; i != rects.length; i++) {
 						rect = rects[i];
 						if (rect.width > 0 && (!left || rect.left > left)) {
@@ -653,15 +668,80 @@ class Layout {
 						if (rect.height > 0 && (!top || rect.top > top)) {
 							top = rect.top;
 						}
+						if (rect.width > 0 && (!right || rect.right > right)) {
+							right = rect.right;
+						}
+						if (rect.height > 0 && (!bottom || rect.bottom > bottom)) {
+							bottom = rect.bottom;
+						}
 					}
+					let extraBottomSpace = 0, extraRightSpace=0;
+					//if the node is inside a table row and exceeds with
+					//bottom padding, border and margin
+					const insideTableCell = parentOf(node, "TD", rendered);
+					if (insideTableCell ) {
+						const tableRow = parentOf(node, "TR", rendered);
+						const table = parentOf(node, "TABLE", rendered);
+						// Get the computed styles for the cell
+						var cellStyles = window.getComputedStyle(insideTableCell);
+						var rowStyles = window.getComputedStyle(tableRow);
+						var tableStyles = window.getComputedStyle(table);
+						// https://developer.mozilla.org/en-US/docs/Web/API/CSS_Object_Model/Determining_the_dimensions_of_elements
+						extraBottomSpace = Math.ceil(
+							parseFloat(cellStyles.getPropertyValue("margin-bottom")) +
+							parseFloat(cellStyles.getPropertyValue("padding-bottom")) +
+							parseFloat(cellStyles.getPropertyValue("border-bottom-width")) +
 
-					if (left >= end || top >= vEnd) {
+							parseFloat(rowStyles.getPropertyValue("margin-bottom")) +
+							parseFloat(rowStyles.getPropertyValue("padding-bottom")) +
+							parseFloat(rowStyles.getPropertyValue("border-bottom-width")) +
+
+							parseFloat(tableStyles.getPropertyValue("margin-bottom")) +
+							parseFloat(tableStyles.getPropertyValue("padding-bottom")) +
+							parseFloat(tableStyles.getPropertyValue("border-bottom-width"))
+						);
+
+						extraRightSpace = Math.ceil(
+							parseFloat(cellStyles.getPropertyValue("margin-right")) +
+							parseFloat(cellStyles.getPropertyValue("padding-right")) +
+							parseFloat(cellStyles.getPropertyValue("border-right-width")) +
+
+							parseFloat(rowStyles.getPropertyValue("margin-right")) +
+							parseFloat(rowStyles.getPropertyValue("padding-right")) +
+							parseFloat(rowStyles.getPropertyValue("border-right-width")) +
+
+							parseFloat(tableStyles.getPropertyValue("margin-right")) +
+							parseFloat(tableStyles.getPropertyValue("padding-right")) +
+							parseFloat(tableStyles.getPropertyValue("border-right-width"))
+						);
+					}
+					//The problem is that when we check if a letter from the overflowing word fits the page 
+					//we actually check if the letter starts inside the current print page 
+					//(we check for the top and left boundary of the letter). We should instead check 
+					//if the letter is fully inside the boundaries of the current print page 
+					//by looking at the bottom and right letter boundaries.
+					if (right >= (end - extraRightSpace) || bottom >= (vEnd - extraBottomSpace)) {
+						// The text node overflows the current print page so it needs to be split.
 						range = document.createRange();
-						offset = this.textBreak(node, start, end, vStart, vEnd);
-						if (!offset) {
-							range = undefined;
-						} else {
+						offset = this.textBreak(node, (end - extraRightSpace), (vEnd - extraBottomSpace) );
+						if (offset === 0) {
+							// Not even a single character from the text node fits the current print page so the text
+							// node needs to be moved to the next print page.
+							if (insideTableCell ) {
+								// But we take the whole row, not just the cell that is causing the break.
+								range.setStartBefore(insideTableCell.parentElement);
+							}
+							else {
+								range.setStartBefore(node);
+							}
+						} else if (offset) {
+							// Only the text before the offset fits the current print page. The rest needs to be moved
+							// to the next print page.
 							range.setStart(node, offset);
+						} else {
+							// Undefined offset is unexpected because we know that the text node is not empty (not even
+							// blank, because we check node.textContent.trim().length above).
+							range = undefined;
 						}
 						break;
 					}
@@ -728,8 +808,8 @@ class Layout {
 
 		return this.breakAt(after);
 	}
-
-	textBreak(node, start, end, vStart, vEnd) {
+	//removed the unused parameters
+	textBreak(node, end, vEnd) {
 		let wordwalker = words(node);
 		let left = 0;
 		let right = 0;
@@ -754,15 +834,21 @@ class Layout {
 			bottom = Math.floor(pos.bottom);
 
 			if (left >= end || top >= vEnd) {
+				// The word is completely outside the bounds of the print page. We need to break before it.
 				offset = word.startOffset;
 				break;
 			}
 
 			if (right > end || bottom > vEnd) {
+				// The word is partially outside the print page (e.g. a word could be split / hyphenated on two lines of
+				// text and only the first part fits into the current print page; or simply because the end of the page
+				// truncates vertically the word). We need to see if any of its letters fit into the current print page.
 				let letterwalker = letters(word);
 				let letter, nextLetter, doneLetter;
 
 				while (!doneLetter) {
+					// Note that the letter walker continues to walk beyond the end of the word, until the end of the
+					// text node.
 					nextLetter = letterwalker.next();
 					letter = nextLetter.value;
 					doneLetter = nextLetter.done;
@@ -772,10 +858,11 @@ class Layout {
 					}
 
 					pos = getBoundingClientRect(letter);
-					left = Math.floor(pos.left);
-					top = Math.floor(pos.top);
+					right = Math.floor(pos.right);
+					bottom = Math.floor(pos.bottom);
 
-					if (left >= end || top >= vEnd) {
+					// Stop if the letter exceeds the bounds of the print page. We need to break before it.
+					if (right > end || bottom > vEnd) {
 						offset = letter.startOffset;
 						done = true;
 

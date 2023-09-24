@@ -43,13 +43,13 @@ class Page {
 
 		let size = area.getBoundingClientRect();
 
-
-		area.style.columnWidth = Math.round(size.width) + "px";
+		//use floor for page sizes instead of round and make sure there are no overlfows
+		area.style.columnWidth = Math.floor(size.width) + "px";
 		area.style.columnGap = "calc(var(--pagedjs-margin-right) + var(--pagedjs-margin-left) + var(--pagedjs-bleed-right) + var(--pagedjs-bleed-left) + var(--pagedjs-column-gap-offset))";
 		// area.style.overflow = "scroll";
 
-		this.width = Math.round(size.width);
-		this.height = Math.round(size.height);
+		this.width = Math.floor(size.width);
+		this.height = Math.floor(size.height);
 
 		this.element = page;
 		this.pagebox = pagebox;
