@@ -725,9 +725,13 @@ class Layout {
 						// The text node overflows the current print page so it needs to be split.
 						range = document.createRange();
 						offset = this.textBreak(node, (end - extraRightSpace), (vEnd - extraBottomSpace) );
-						if (offset === 0) {
-							// Not even a single character from the text node fits the current print page so the text
+
+						// Undefined offset or offset = -1 is unexpected 
+						// because we know that the text node is not empty (not even blank, because we check node.textContent.trim().length above).
+						if (offset <= 0 ) {
+							// offset = 0 means not even a single character from the text node fits the current print page so the text
 							// node needs to be moved to the next print page.
+							// offset = -1 means could not identify the word break. but range= undefiend creates a infinite loop in certain scenarios. So just consider to move the entire node if unable to detect the word break. Similar to offsert = 0
 							if (insideTableCell ) {
 								// But we take the whole row, not just the cell that is causing the break.
 								range.setStartBefore(insideTableCell.parentElement);
@@ -736,14 +740,10 @@ class Layout {
 								range.setStartBefore(node);
 							}
 
-						} else if (offset) {
+						} else {
 							// Only the text before the offset fits the current print page. The rest needs to be moved
 							// to the next print page.
 							range.setStart(node, offset);
-						} else {
-							// Undefined offset is unexpected because we know that the text node is not empty (not even
-							// blank, because we check node.textContent.trim().length above).
-							range = undefined;
 						}
 						break;
 					}
@@ -818,7 +818,7 @@ class Layout {
 		let top = 0;
 		let bottom = 0;
 		let word, next, done, pos;
-		let offset;
+		let offset=-1;
 		while (!done) {
 			next = wordwalker.next();
 			word = next.value;
