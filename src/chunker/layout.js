@@ -675,6 +675,7 @@ class Layout {
 							bottom = rect.bottom;
 						}
 					}
+
 					let extraBottomSpace = 0, extraRightSpace=0;
 					//if the node is inside a table row and exceeds with
 					//bottom padding, border and margin
@@ -720,7 +721,7 @@ class Layout {
 					//(we check for the top and left boundary of the letter). We should instead check 
 					//if the letter is fully inside the boundaries of the current print page 
 					//by looking at the bottom and right letter boundaries.
-					if (right >= (end - extraRightSpace) || bottom >= (vEnd - extraBottomSpace)) {
+					if (right > (end - extraRightSpace) || bottom > (vEnd - extraBottomSpace)) {
 						// The text node overflows the current print page so it needs to be split.
 						range = document.createRange();
 						offset = this.textBreak(node, (end - extraRightSpace), (vEnd - extraBottomSpace) );
@@ -734,6 +735,7 @@ class Layout {
 							else {
 								range.setStartBefore(node);
 							}
+
 						} else if (offset) {
 							// Only the text before the offset fits the current print page. The rest needs to be moved
 							// to the next print page.
