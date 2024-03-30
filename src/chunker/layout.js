@@ -839,8 +839,8 @@ class Layout {
 			pos = getBoundingClientRect(word);
 			//for word content, use floor for left & right and ceil for top & bottom
 			left = Math.floor(pos.left);
-			right = Math.floor(pos.right);
-			top = Math.ceil(pos.top);
+			top = Math.floor(pos.top);
+			right = Math.ceil(pos.right);
 			bottom = Math.ceil(pos.bottom);
 
 			if (left >= (end - EXTRA_PIXELS) || top >= (vEnd - EXTRA_PIXELS)) {
