@@ -837,11 +837,11 @@ class Layout {
 			}
 
 			pos = getBoundingClientRect(word);
-
+			//for word content, use floor for left & right and ceil for top & bottom
 			left = Math.floor(pos.left);
 			right = Math.floor(pos.right);
-			top = Math.floor(pos.top);
-			bottom = Math.floor(pos.bottom);
+			top = Math.ceil(pos.top);
+			bottom = Math.ceil(pos.bottom);
 
 			if (left >= (end - EXTRA_PIXELS) || top >= (vEnd - EXTRA_PIXELS)) {
 				// The word is completely outside the bounds of the print page. We need to break before it.
@@ -868,10 +868,11 @@ class Layout {
 					}
 
 					pos = getBoundingClientRect(letter);
-					right = Math.floor(pos.right);
-					bottom = Math.floor(pos.bottom);
 
 					// Stop if the letter exceeds the bounds of the print page. We need to break before it.
+					//AptTec fix check if the bottom or right margin exceeds the allocated space
+					right = Math.ceil(pos.right);
+					bottom = Math.ceil(pos.bottom);
 					if (right >= (end - EXTRA_PIXELS) || bottom >= (vEnd - EXTRA_PIXELS) ) {
 						offset = letter.startOffset;
 						done = true;
